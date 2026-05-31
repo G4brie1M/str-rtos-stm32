@@ -13,9 +13,8 @@ void rtos_start();
 int task_create(void (*task_function)(), int priority);
 void delay_ms(uint32_t time_ms);
 
-## Synchronization Interface
+"Synchronization Interface"
 
-```cpp
 void semaphore_init(int initial_value);
 void semaphore_wait();
 void semaphore_signal();
