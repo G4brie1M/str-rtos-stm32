@@ -1,4 +1,4 @@
-# Core/Inc
+# Inc
 
 This directory contains header files for the STM32 application.
 
