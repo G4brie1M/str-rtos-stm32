@@ -13,7 +13,7 @@ void rtos_start();
 int task_create(void (*task_function)(), int priority);
 void delay_ms(uint32_t time_ms);
 
-## endregion
+#endregion
 
 
 ## Synchronization Interface
