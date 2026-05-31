@@ -11,17 +11,19 @@ The goal is to allow each team member to develop their part without depending on
 - [Trace Interface](#trace-interface)
 - [Control Interface](#control-interface)
 - [Hardware Interface](#hardware-interface)
+```cpp
 
 ---
 
 ## RTOS Interface
 
-```cpp
 void rtos_init();
 void rtos_start();
 
 int task_create(void (*task_function)(), int priority);
 void delay_ms(uint32_t time_ms);
+
+---
 
 ## Synchronization Interface
 
