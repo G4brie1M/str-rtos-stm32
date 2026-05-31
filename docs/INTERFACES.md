@@ -12,7 +12,9 @@ void rtos_start();
 
 int task_create(void (*task_function)(), int priority);
 void delay_ms(uint32_t time_ms);
-##pragma endregion
+
+## endregion
+
 
 ## Synchronization Interface
 
@@ -20,7 +22,7 @@ void delay_ms(uint32_t time_ms);
 void semaphore_init(int initial_value);
 void semaphore_wait();
 void semaphore_signal();
-##pragma endregion
+## endregion
 
 ## Trace Interface
 
