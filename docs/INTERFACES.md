@@ -24,8 +24,7 @@ int task_create(void (*task_function)(), int priority);
 void delay_ms(uint32_t time_ms);
 ```
 
-```markdown
----
+
 ## Synchronization Interface
 
 ```cpp
@@ -34,8 +33,6 @@ void semaphore_wait();
 void semaphore_signal();
 ```
 
-```markdown
----
 ## Trace Interface
 
 ```cpp
@@ -45,8 +42,6 @@ void trace_task_switch(const char* from_task, const char* to_task);
 void trace_export();
 ```
 
-```markdown
----
 ## Control Interface
 
 ```cpp
@@ -54,8 +49,6 @@ void pid_init(float kp, float ki, float kd);
 float pid_update(float setpoint, float measurement);
 ```
 
-```markdown
----
 ## Hardware Interface
 
 ```cpp
@@ -64,9 +57,8 @@ void actuator_set(float command);
 void pwm_set_duty(float duty_cycle);
 ```
 
-```markdown
----
 ## Pneumatic Levitation Task
 
 ```cpp
 void levitation_control_task();
+```
