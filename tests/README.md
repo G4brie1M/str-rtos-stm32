@@ -1,3 +1,0 @@
-# Tests
-
-Project test codes.
