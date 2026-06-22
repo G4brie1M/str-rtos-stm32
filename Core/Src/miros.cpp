@@ -158,6 +158,75 @@ void OS_waitNextPeriod(void) {
     __asm volatile ("cpsie i");//reabilita a interrupcao
 }
 
+/* Cooperacao voluntaria (Fase 1): a tarefa em execucao cede a CPU para uma
+ * reavaliacao do escalonador SEM se bloquear. Diferente de OS_delay e de
+ * OS_waitNextPeriod, NAO mexe no timeout nem no ready bit: a tarefa continua
+ * pronta. Sobre EDF, OS_sched so troca de contexto se houver outra tarefa pronta
+ * com deadline absoluto menor ou igual (menor indice em caso de empate); se a
+ * propria tarefa ainda for a de menor deadline, OS_next == OS_curr e nada
+ * acontece. */
+void OS_yield(void) {
+    __asm volatile ("cpsid i");//desabilita a interrupcao
+    OS_sched();
+    __asm volatile ("cpsie i");//reabilita a interrupcao
+}
+
+/* Semaforo contador com fila de bloqueio (Fase 1):
+ * Bloqueio PASSIVO: a thread sem credito sai do OS_readySet e cede a CPU; nao
+ * ha espera ativa (busy-waiting). A "fila" e o bitmask waitSet do proprio
+ * semaforo. Semantica de handoff direto: signal OU acorda um esperador OU
+ * incrementa o contador, nunca os dois, o que evita perda de evento */
+
+void OSSem_init(OSSemaphore *me, int32_t initial) {
+    me->count   = initial;
+    me->waitSet = 0U;
+}
+
+void OSSem_wait(OSSemaphore *me) {
+    __asm volatile ("cpsid i");//regiao critica
+
+    // a idleThread nunca pode bloquear
+    Q_REQUIRE(OS_curr != OS_thread[0]);
+
+    if (me->count > 0) {
+        me->count--;// se tem credito: consome e segue
+    } else {
+        //sem credito: bloqueia a thread atual de forma passiva
+        //entra na fila do semaforo e sai do conjunto de pronta
+        me->waitSet |= (1U << (OS_currIdx - 1U));
+        OS_readySet &= ~(1U << (OS_currIdx - 1U));
+        OS_curr->timeout = 0U; // nao e espera por tempo: o tick a ignora
+        OS_sched(); //cede a CPU, retorna aqui ao ser acordada
+    }
+    __asm volatile ("cpsie i");
+}
+
+void OSSem_signal(OSSemaphore *me){
+    __asm volatile ("cpsid i");//regiao critica
+
+    if (me->waitSet != 0U) {
+        // tem thread(s) esperando: acorda a de MENOR deadline absoluto
+        //(consistente com o EDF) e passa o recurso direto (count intacto)
+        uint8_t wakeIdx = 0U;
+        uint32_t best = 0xFFFFFFFFU;
+        uint8_t n;
+        for (n = 1U; n < OS_threadNum; n++) {
+            if ((me->waitSet & (1U << (n - 1U))) != 0U) {
+                if (OS_thread[n]->absDeadline < best) {
+                    best = OS_thread[n]->absDeadline;
+                    wakeIdx = n;
+                }
+            }
+        }
+        me->waitSet &= ~(1U << (wakeIdx - 1U));//sai da fila do semaforo
+        OS_readySet |= (1U << (wakeIdx - 1U)); //volta a ser pronta
+        OS_sched();// pode preemptar se a acordada for mais urgente
+    } else {
+        me->count++; //ninguem esperando: apenas credita
+    }
+    __asm volatile ("cpsie i");
+}
+
 void OSThread_start(
     OSThread *me,
     uint32_t period,
