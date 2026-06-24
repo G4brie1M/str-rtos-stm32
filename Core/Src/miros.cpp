@@ -35,6 +35,16 @@
 
 Q_DEFINE_THIS_FILE
 
+/* ---- Log de escalonamento (demonstracao do EDF) ----
+ * A cada TROCA de contexto, grava uma palavra: (tick << 8) | indice_da_tarefa.
+ * Global e extern "C" para ter simbolo SEM name mangling, legivel direto no
+ * Renode/GDB por "g_schedLog" e "g_schedLogCount". Para de gravar quando cheio,
+ * preservando o inicio da execucao (que contem o instante decisivo do teste). */
+extern "C" {
+volatile uint32_t g_schedLog[128];
+volatile uint32_t g_schedLogCount = 0U;
+}
+
 namespace rtos {
 
 OSThread * volatile OS_curr; /* pointer to the current thread */
@@ -95,6 +105,11 @@ void OS_sched(void) {
 
     /* trigger PendSV, if needed */
     if (OS_next != OS_curr) {
+        /* registra a troca: (tick << 8) | indice da tarefa que vai rodar */
+        if (g_schedLogCount < 128U) {
+            g_schedLog[g_schedLogCount] = (OS_tickCtr << 8) | OS_currIdx;
+            g_schedLogCount = g_schedLogCount + 1U;
+        }
         *(uint32_t volatile *)0xE000ED04 = (1U << 28);
     }
 }
@@ -113,6 +128,11 @@ void OS_run(void) {
 
 void OS_tick(void) {
 	OS_tickCtr = OS_tickCtr + 1U;//soma feita assim pra evita ro warning -Wvolatile do C++20
+	/* credita 1 tick de CPU a tarefa que estava rodando neste intervalo.
+	 * Guarda contra OS_curr nulo (antes da 1a troca de contexto). */
+	if (OS_curr != (OSThread *)0) {
+		OS_curr->cpuTicks = OS_curr->cpuTicks + 1U;
+	}
 	uint8_t n = 0;
 	for(n=1U;n<OS_threadNum; n++){ 				/* cycle through every thread but the idle */
 		if(OS_thread[n]->timeout != 0U){
@@ -169,6 +189,19 @@ void OS_yield(void) {
     __asm volatile ("cpsid i");//desabilita a interrupcao
     OS_sched();
     __asm volatile ("cpsie i");//reabilita a interrupcao
+}
+
+/* Gasta exatamente `ticks` ticks de TEMPO DE CPU (nao de tempo de parede),
+ * usado nas tarefas de teste para modelar tempo de execucao (WCET). O cpuTicks
+ * da tarefa corrente so avanca quando ELA esta rodando (creditado no OS_tick),
+ * entao, mesmo que a tarefa seja preemptada no meio, ela recebe no total
+ * exatamente `ticks` ticks de CPU. Roda com interrupcoes habilitadas, de modo
+ * que o SysTick continua chegando e a preempcao por EDF pode ocorrer. */
+void OS_busyWork(uint32_t ticks) {
+    uint32_t start = OS_curr->cpuTicks;
+    while ((OS_curr->cpuTicks - start) < ticks) {
+        /* spin: queima CPU ate acumular `ticks` ticks de execucao */
+    }
 }
 
 /* Semaforo contador com fila de bloqueio (Fase 1):
@@ -272,6 +305,7 @@ void OSThread_start(
     me->period = period;
     me->timeout = period;
     me->absDeadline = period;
+    me->cpuTicks = 0U;
 
     /* round up the bottom of the stack to the 8-byte boundary */
     stk_limit = (uint32_t *)(((((uint32_t)stkSto - 1U) / 8) + 1U) * 8);

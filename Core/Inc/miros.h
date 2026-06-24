@@ -15,6 +15,7 @@ typedef struct {
     uint32_t timeout; /* timeout delay down-counter */
     uint32_t period;// periodo da tarefa em ticks
     uint32_t absDeadline; // tick da deadline absoluta
+    volatile uint32_t cpuTicks; // ticks de CPU ja consumidos por esta tarefa
     /* ... other attributes associated with a thread */
 } OSThread;
 
@@ -54,6 +55,9 @@ void OS_waitNextPeriod(void);
 
 //cooperacao voluntaria:cede a CPU sem bloquear(Fase 1)
 void OS_yield(void);
+
+// gasta `ticks` ticks de TEMPO DE CPU (demo EDF): modela tempo de execucao (WCET)
+void OS_busyWork(uint32_t ticks);
 
 // semaforo contador (Fase 1): bloqueio passivo, sem espera ativa
 void OSSem_init(OSSemaphore *me, int32_t initial);
