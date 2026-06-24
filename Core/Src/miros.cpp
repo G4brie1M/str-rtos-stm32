@@ -332,10 +332,17 @@ void SystemClock_Config(void)
   }
 }
 
+/* Frequencia alvo do sistema: o PLL deste projeto produz 170 MHz
+ * (HSI 16 MHz / M=4 * N=85 / R=2). Usamos esta constante FIXA para a recarga
+ * do SysTick em vez de SystemCoreClock, que e calculado em runtime lendo o RCC
+ * e sai errado sob o Renode (RCC e um stub). No hardware real o valor coincide,
+ * entao o comportamento e identico la. */
+const uint32_t SYS_CLOCK_HZ = 170000000U;
+
 void OS_onStartup(void) {
 	SystemClock_Config();
     SystemCoreClockUpdate();
-    SysTick_Config(SystemCoreClock / TICKS_PER_SEC);
+    SysTick_Config(SYS_CLOCK_HZ / TICKS_PER_SEC);
 
     /* set the SysTick interrupt priority (highest) */
     NVIC_SetPriority(SysTick_IRQn, 0U);
