@@ -40,6 +40,8 @@ namespace rtos {
 OSThread * volatile OS_curr; /* pointer to the current thread */
 OSThread * volatile OS_next; /* pointer to the next thread to run */
 
+uint32_t volatile OS_tickCtr = 0U; //contador global de ticks
+
 OSThread *OS_thread[32 + 1]; /* array of threads started so far */
 uint32_t OS_readySet; /* bitmask of threads that are ready to run */
 
@@ -58,29 +60,42 @@ void OS_init(void *stkSto, uint32_t stkSize) {
     /* set the PendSV interrupt priority to the lowest level 0xFF */
     *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);
 
-    /* start idleThread thread */
+    /* inicia a thread idleThread.
+     * period = 0 -> a idle NAO e periodica; o tick nunca a re-libera,
+     * ela so executa quando nenhuma outra thread esta pronta. */
     OSThread_start(&idleThread,
+                   0U,
                    &main_idleThread,
                    stkSto, stkSize);
 }
 
 void OS_sched(void) {
     if (OS_readySet == 0U) { /* idle condition? */
-    	OS_currIdx = 0U; /* the idle thread */
+        OS_currIdx = 0U; /* the idle thread */
     } else {
-    	do{ /* find the next ready thread*/
-            OS_currIdx++;
-            if(OS_currIdx == OS_threadNum){
-            	OS_currIdx = 1;
+        /* EDF: among the ready threads, pick the one whose absolute
+         * deadline is the earliest (smallest absDeadline). */
+        uint8_t  bestIdx = 0U;                 /* chosen thread index   */
+        uint32_t bestDeadline = 0xFFFFFFFFU;   /* smallest deadline yet */
+        uint8_t  n;
+
+        for (n = 1U; n < OS_threadNum; n++) {
+            /* is thread n ready? (its bit is set in OS_readySet) */
+            if ((OS_readySet & (1U << (n - 1U))) != 0U) {
+                if (OS_thread[n]->absDeadline < bestDeadline) {
+                    bestDeadline = OS_thread[n]->absDeadline;
+                    bestIdx = n;
+                }
             }
-            OS_next = OS_thread[OS_currIdx];
-    	}while((OS_readySet & (1U <<(OS_currIdx - 1U))) == 0 );
+        }
+        OS_currIdx = bestIdx;
     }
+
     OS_next = OS_thread[OS_currIdx];
 
     /* trigger PendSV, if needed */
-    if(OS_next != OS_curr){
-    	*(uint32_t volatile *)0xE000ED04 = (1U << 28);
+    if (OS_next != OS_curr) {
+        *(uint32_t volatile *)0xE000ED04 = (1U << 28);
     }
 }
 
@@ -97,13 +112,18 @@ void OS_run(void) {
 }
 
 void OS_tick(void) {
+	OS_tickCtr = OS_tickCtr + 1U;//soma feita assim pra evita ro warning -Wvolatile do C++20
 	uint8_t n = 0;
 	for(n=1U;n<OS_threadNum; n++){ 				/* cycle through every thread but the idle */
 		if(OS_thread[n]->timeout != 0U){
 			OS_thread[n]->timeout--;			/* decrease the timeout */
 			if(OS_thread[n]->timeout == 0U){
-				OS_readySet |= (1U << (n-1U));	/* if the thread is ready mask the corresponding bit */
-			}
+			      if(OS_thread[n]->period != 0U){ // so tarefas periodicas religam
+			          OS_thread[n]->absDeadline = OS_tickCtr + OS_thread[n]->period; //define a deadline do novo trabalho
+			          OS_thread[n]->timeout = OS_thread[n]->period;//reseta o timeout
+			      }
+			      OS_readySet |= (1U << (n-1U));
+			  }
 		}
 	}
 }
@@ -120,8 +140,96 @@ void OS_delay(uint32_t ticks) {
     __asm volatile ("cpsie i");
  }
 
+/* Chamada por uma tarefa periodica no FIM de cada job ("run to completion").
+ * Bloqueia a tarefa ate a sua proxima liberacao. Diferente de OS_delay, NAO
+ * define timeout: OS_tick() ja armou a proxima liberacao (e o proximo
+ * deadline absoluto) no momento em que este job foi liberado, entao aqui so
+ * saimos do ready set e passamos a CPU para a tarefa de menor deadline */
+void OS_waitNextPeriod(void) {
+    __asm volatile ("cpsid i");//desabilita a interrupcao
+
+    //nunca chame OS_waitNextPeriod a partir da idleThread
+    Q_REQUIRE(OS_curr != OS_thread[0]);
+
+    // bloqueia: limpa o ready bit desta tarefa. A ISR do tick o re-seta um
+    //periodo apos a ultima liberacao
+    OS_readySet &= ~(1U << (OS_currIdx - 1U));
+    OS_sched();
+    __asm volatile ("cpsie i");//reabilita a interrupcao
+}
+
+/* Cooperacao voluntaria (Fase 1): a tarefa em execucao cede a CPU para uma
+ * reavaliacao do escalonador SEM se bloquear. Diferente de OS_delay e de
+ * OS_waitNextPeriod, NAO mexe no timeout nem no ready bit: a tarefa continua
+ * pronta. Sobre EDF, OS_sched so troca de contexto se houver outra tarefa pronta
+ * com deadline absoluto menor ou igual (menor indice em caso de empate); se a
+ * propria tarefa ainda for a de menor deadline, OS_next == OS_curr e nada
+ * acontece. */
+void OS_yield(void) {
+    __asm volatile ("cpsid i");//desabilita a interrupcao
+    OS_sched();
+    __asm volatile ("cpsie i");//reabilita a interrupcao
+}
+
+/* Semaforo contador com fila de bloqueio (Fase 1):
+ * Bloqueio PASSIVO: a thread sem credito sai do OS_readySet e cede a CPU; nao
+ * ha espera ativa (busy-waiting). A "fila" e o bitmask waitSet do proprio
+ * semaforo. Semantica de handoff direto: signal OU acorda um esperador OU
+ * incrementa o contador, nunca os dois, o que evita perda de evento */
+
+void OSSem_init(OSSemaphore *me, int32_t initial) {
+    me->count   = initial;
+    me->waitSet = 0U;
+}
+
+void OSSem_wait(OSSemaphore *me) {
+    __asm volatile ("cpsid i");//regiao critica
+
+    // a idleThread nunca pode bloquear
+    Q_REQUIRE(OS_curr != OS_thread[0]);
+
+    if (me->count > 0) {
+        me->count--;// se tem credito: consome e segue
+    } else {
+        //sem credito: bloqueia a thread atual de forma passiva
+        //entra na fila do semaforo e sai do conjunto de pronta
+        me->waitSet |= (1U << (OS_currIdx - 1U));
+        OS_readySet &= ~(1U << (OS_currIdx - 1U));
+        OS_curr->timeout = 0U; // nao e espera por tempo: o tick a ignora
+        OS_sched(); //cede a CPU, retorna aqui ao ser acordada
+    }
+    __asm volatile ("cpsie i");
+}
+
+void OSSem_signal(OSSemaphore *me){
+    __asm volatile ("cpsid i");//regiao critica
+
+    if (me->waitSet != 0U) {
+        // tem thread(s) esperando: acorda a de MENOR deadline absoluto
+        //(consistente com o EDF) e passa o recurso direto (count intacto)
+        uint8_t wakeIdx = 0U;
+        uint32_t best = 0xFFFFFFFFU;
+        uint8_t n;
+        for (n = 1U; n < OS_threadNum; n++) {
+            if ((me->waitSet & (1U << (n - 1U))) != 0U) {
+                if (OS_thread[n]->absDeadline < best) {
+                    best = OS_thread[n]->absDeadline;
+                    wakeIdx = n;
+                }
+            }
+        }
+        me->waitSet &= ~(1U << (wakeIdx - 1U));//sai da fila do semaforo
+        OS_readySet |= (1U << (wakeIdx - 1U)); //volta a ser pronta
+        OS_sched();// pode preemptar se a acordada for mais urgente
+    } else {
+        me->count++; //ninguem esperando: apenas credita
+    }
+    __asm volatile ("cpsie i");
+}
+
 void OSThread_start(
     OSThread *me,
+    uint32_t period,
     OSThreadHandler threadHandler,
     void *stkSto, uint32_t stkSize)
 {
@@ -156,6 +264,14 @@ void OSThread_start(
 
     /* save the top of the stack in the thread's attibute */
     me->sp = sp;
+
+    /* periodic-task attributes; period == 0 means a non-periodic thread
+     * (idle thread or a one-shot OS_delay user), which the tick never re-releases.
+     * For a periodic task: first release one period from now (timeout = period)
+     * and the first job's deadline is at t = period (absDeadline = period). */
+    me->period = period;
+    me->timeout = period;
+    me->absDeadline = period;
 
     /* round up the bottom of the stack to the 8-byte boundary */
     stk_limit = (uint32_t *)(((((uint32_t)stkSto - 1U) / 8) + 1U) * 8);
@@ -216,10 +332,17 @@ void SystemClock_Config(void)
   }
 }
 
+/* Frequencia alvo do sistema: o PLL deste projeto produz 170 MHz
+ * (HSI 16 MHz / M=4 * N=85 / R=2). Usamos esta constante FIXA para a recarga
+ * do SysTick em vez de SystemCoreClock, que e calculado em runtime lendo o RCC
+ * e sai errado sob o Renode (RCC e um stub). No hardware real o valor coincide,
+ * entao o comportamento e identico la. */
+const uint32_t SYS_CLOCK_HZ = 170000000U;
+
 void OS_onStartup(void) {
 	SystemClock_Config();
     SystemCoreClockUpdate();
-    SysTick_Config(SystemCoreClock / TICKS_PER_SEC);
+    SysTick_Config(SYS_CLOCK_HZ / TICKS_PER_SEC);
 
     /* set the SysTick interrupt priority (highest) */
     NVIC_SetPriority(SysTick_IRQn, 0U);
