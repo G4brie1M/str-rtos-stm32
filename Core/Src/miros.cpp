@@ -50,6 +50,10 @@ uint8_t OS_currIdx; /* current thread index for the circular array */
 
 
 OSThread idleThread;
+
+volatile TraceEvent traceBuffer[TRACE_SIZE];
+volatile uint16_t traceHead = 0U;
+
 void main_idleThread() {
     while (1) {
         OS_onIdle();
@@ -95,6 +99,7 @@ void OS_sched(void) {
 
     /* trigger PendSV, if needed */
     if (OS_next != OS_curr) {
+    	Trace_log(TRACE_SWITCH);//guarda esse evento
         *(uint32_t volatile *)0xE000ED04 = (1U << 28);
     }
 }
@@ -122,6 +127,7 @@ void OS_tick(void) {
 			          OS_thread[n]->absDeadline = OS_tickCtr + OS_thread[n]->period; //define a deadline do novo trabalho
 			          OS_thread[n]->timeout = OS_thread[n]->period;//reseta o timeout
 			      }
+			      Trace_log(TRACE_THREAD_READY);//guarda esse evento
 			      OS_readySet |= (1U << (n-1U));
 			  }
 		}
@@ -133,6 +139,7 @@ void OS_delay(uint32_t ticks) {
 
     /* never call OS_delay from the idleThread */
     Q_REQUIRE(OS_curr != OS_thread[0]);
+    Trace_log(TRACE_DELAY);//guarda esse evento
 
     OS_curr->timeout = ticks;
     OS_readySet &= ~(1U << (OS_currIdx - 1U));
@@ -167,6 +174,7 @@ void OS_waitNextPeriod(void) {
  * acontece. */
 void OS_yield(void) {
     __asm volatile ("cpsid i");//desabilita a interrupcao
+    Trace_log(TRACE_YIELD);//guarda esse evento
     OS_sched();
     __asm volatile ("cpsie i");//reabilita a interrupcao
 }
@@ -185,6 +193,8 @@ void OSSem_init(OSSemaphore *me, int32_t initial) {
 void OSSem_wait(OSSemaphore *me) {
     __asm volatile ("cpsid i");//regiao critica
 
+    Trace_log(TRACE_SEM_WAIT); //guarda esse evento
+
     // a idleThread nunca pode bloquear
     Q_REQUIRE(OS_curr != OS_thread[0]);
 
@@ -195,6 +205,7 @@ void OSSem_wait(OSSemaphore *me) {
         //entra na fila do semaforo e sai do conjunto de pronta
         me->waitSet |= (1U << (OS_currIdx - 1U));
         OS_readySet &= ~(1U << (OS_currIdx - 1U));
+        Trace_log(TRACE_SEM_BLOCK);//guarda esse evento
         OS_curr->timeout = 0U; // nao e espera por tempo: o tick a ignora
         OS_sched(); //cede a CPU, retorna aqui ao ser acordada
     }
@@ -203,6 +214,8 @@ void OSSem_wait(OSSemaphore *me) {
 
 void OSSem_signal(OSSemaphore *me){
     __asm volatile ("cpsid i");//regiao critica
+
+    Trace_log(TRACE_SEM_SIGNAL);//guarda esse evento
 
     if (me->waitSet != 0U) {
         // tem thread(s) esperando: acorda a de MENOR deadline absoluto
@@ -220,11 +233,29 @@ void OSSem_signal(OSSemaphore *me){
         }
         me->waitSet &= ~(1U << (wakeIdx - 1U));//sai da fila do semaforo
         OS_readySet |= (1U << (wakeIdx - 1U)); //volta a ser pronta
+        Trace_log(TRACE_SEM_WAKE);//guarda esse evento, nesse caso POR ENQUANTO o task registrado será a tarefa atual, e não a tarefa acordada.
         OS_sched();// pode preemptar se a acordada for mais urgente
     } else {
         me->count++; //ninguem esperando: apenas credita
     }
     __asm volatile ("cpsie i");
+}
+
+void Trace_log(uint8_t event)
+{
+    uint16_t i = traceHead;
+
+    traceBuffer[i].tick = OS_tickCtr;
+    traceBuffer[i].event = event;
+    traceBuffer[i].task = OS_currIdx;
+    traceBuffer[i].data = 0U; //Por enquanto vou deixar assim, caso queiramos adicionar outra métrica adicionamos aqui
+
+    traceHead++;
+
+    if(traceHead >= TRACE_SIZE)
+    {
+        traceHead = 0U;
+    }
 }
 
 void OSThread_start(

@@ -8,3 +8,7 @@ Main contents:
 - Application interface declarations
 
 The file `miros.h` contains the main MiROS interface used by the project.
+
+// TODO (Trace v2):
+// Alterar Trace_log(event) para Trace_log(event, task)
+// permitindo registrar tarefas diferentes da tarefa atual.

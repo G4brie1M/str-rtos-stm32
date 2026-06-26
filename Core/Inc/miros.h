@@ -28,7 +28,34 @@ typedef struct {
 
 const uint16_t TICKS_PER_SEC = 100U;
 
+enum TraceEventType {
+    TRACE_SWITCH = 1,
+    TRACE_YIELD,
+    TRACE_DELAY,
+    TRACE_SEM_WAIT,
+    TRACE_SEM_BLOCK,
+    TRACE_SEM_SIGNAL,
+    TRACE_SEM_WAKE,
+    TRACE_ISR_ENTER,
+	TRACE_THREAD_READY,
+    TRACE_ISR_EXIT
+};
+
+typedef struct {
+	uint32_t tick;
+	uint8_t event;
+	uint8_t task;
+	uint16_t data;
+} TraceEvent;
+
+#define TRACE_SIZE 512U
+
+extern volatile TraceEvent traceBuffer[TRACE_SIZE];
+extern volatile uint16_t traceHead;
+
 typedef void (*OSThreadHandler)();
+
+void Trace_log(uint8_t event);
 
 void OS_init(void *stkSto, uint32_t stkSize);
 
@@ -67,5 +94,7 @@ void OSThread_start(
     void *stkSto, uint32_t stkSize);
 
 }
+
+void Trace_log(uint8_t event);
 
 #endif /* INC_MIROS_H_ */
