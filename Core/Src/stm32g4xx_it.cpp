@@ -20,7 +20,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32g4xx_it.h"
-
 #include "miros.h"
 
 /******************************************************************************/
@@ -109,11 +108,16 @@ void DebugMon_Handler(void)
   */
 void SysTick_Handler(void)
 {
-  HAL_IncTick();
-  rtos::OS_tick();
-  __disable_irq();
-  rtos::OS_sched();
-  __enable_irq();
+	rtos::Trace_log(rtos::TRACE_ISR_ENTER, 0);
+
+    HAL_IncTick();
+    rtos::OS_tick();
+
+    __disable_irq();
+    rtos::OS_sched();
+    __enable_irq();
+
+    rtos::Trace_log(rtos::TRACE_ISR_EXIT, 0);
 }
 
 /******************************************************************************/

@@ -55,7 +55,7 @@ extern volatile uint16_t traceHead;
 
 typedef void (*OSThreadHandler)();
 
-void Trace_log(uint8_t event);
+void Trace_log(uint8_t event, uint8_t task);
 
 void OS_init(void *stkSto, uint32_t stkSize);
 
@@ -94,7 +94,5 @@ void OSThread_start(
     void *stkSto, uint32_t stkSize);
 
 }
-
-void Trace_log(uint8_t event);
 
 #endif /* INC_MIROS_H_ */
