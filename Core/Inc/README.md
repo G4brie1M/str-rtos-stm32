@@ -9,6 +9,4 @@ Main contents:
 
 The file `miros.h` contains the main MiROS interface used by the project.
 
-// TODO (Trace v2):
-// Alterar Trace_log(event) para Trace_log(event, task)
-// permitindo registrar tarefas diferentes da tarefa atual.
+comando renode: ../renode_1.16.1-dotnet_portable/renode ./str-renode.resc

@@ -30,29 +30,75 @@ const uint32_t PERIOD_T1 = 20U;  //200 ms
 const uint32_t PERIOD_T2 = 40U;  //400 ms
 const uint32_t PERIOD_T3 = 80U;  //800 ms
 
+//criação do buffer produtor/consumidor
+#define BUFFER_SIZE 8 //inicialmente definido para 8 mas podemos analisar valores melhores
+
+uint8_t fifo[BUFFER_SIZE];
+
+uint8_t head = 0;
+uint8_t tail = 0;
+
+//definição dos semaforos (usados na fase 3)
+rtos::OSSemaphore empty;  // semáforo de posições livres no buffer bloqueia produtor se zerar
+rtos::OSSemaphore full; // semáforo de posições ocupadas bloqueia consumidor se zerar
+rtos::OSSemaphore mutex; //usado pra exclusão mutua
+
 uint32_t stack_blinky1[40];
 rtos::OSThread blinky1;
+
+//configurado para produtor
 void main_blinky1() {
-    while (1) {
-    	conta0++; // job roda ate completar
-    	rtos::OS_waitNextPeriod();// dorme ate proximo periodo
+    uint8_t value = 0; //inicia valores em 0
+
+    while (1) { //repete indefinidamente
+
+        rtos::OSSem_wait(&empty); // aguarda existir espaço livre no buffer
+        rtos::OSSem_wait(&mutex);
+
+        fifo[head] = value;
+        head = (head + 1U) % BUFFER_SIZE;
+
+        value++;
+        conta0++;
+
+        rtos::OSSem_signal(&mutex);
+        rtos::OSSem_signal(&full);
+
+        rtos::OS_waitNextPeriod();
     }
 }
 
 uint32_t stack_blinky2[40];
 rtos::OSThread blinky2;
+
+
+//configurada para consumidor
 void main_blinky2() {
-    while (1) {
-    	conta1++;
-    	rtos::OS_waitNextPeriod();
+    uint8_t value;
+
+    while (1) { //repete indefinidamente
+
+        rtos::OSSem_wait(&full); // aguarda existir algum dado disponível
+        rtos::OSSem_wait(&mutex);
+
+        value = fifo[tail]; //pega valores do buffer
+        tail = (tail + 1U) % BUFFER_SIZE;
+
+        conta1 = value; //seta conta 1 para valor pego do buffer (como o produtor faz value++ vai crescer lineramente)
+
+        rtos::OSSem_signal(&mutex);
+        rtos::OSSem_signal(&empty);
+
+        rtos::OS_waitNextPeriod();
     }
 }
 
 uint32_t stack_blinky3[40];
 rtos::OSThread blinky3;
+
 void main_blinky3() {
     while (1) {
-    	conta2++;
+    	conta2 = (head + BUFFER_SIZE - tail) % BUFFER_SIZE; //métrica de quantos elementos tem no buffer
     	rtos::OS_waitNextPeriod();
     }
 }
@@ -61,6 +107,10 @@ uint32_t stack_idleThread[40];
 
 int main(void)
 {
+	  //inicialização dos semaforos
+	  rtos::OSSem_init(&empty, BUFFER_SIZE);
+	  rtos::OSSem_init(&full, 0);
+	  rtos::OSSem_init(&mutex, 1);
 
 	  rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
 

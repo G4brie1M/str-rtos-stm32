@@ -32,6 +32,9 @@
 #include "miros.h"
 #include "qassert.h"
 #include "stm32g4xx.h"
+#include "stm32g4xx_hal_uart.h"
+
+//extern UART_HandleTypeDef huart2;
 
 Q_DEFINE_THIS_FILE
 
@@ -374,6 +377,16 @@ const uint32_t SYS_CLOCK_HZ = 170000000U;
 void OS_onStartup(void) {
 	SystemClock_Config();
     SystemCoreClockUpdate();
+
+   // const char msg[] = "UART TEST\r\n";
+
+     //HAL_UART_Transmit(
+           //&huart2,
+           //(uint8_t*)msg,
+          // sizeof(msg) - 1,
+          // 100
+       //);
+
     SysTick_Config(SYS_CLOCK_HZ / TICKS_PER_SEC);
 
     /* set the SysTick interrupt priority (highest) */

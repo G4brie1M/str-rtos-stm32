@@ -9,7 +9,7 @@ mach create $name
 machine LoadPlatformDescription $ORIGIN/nucleog474re.repl
 #machine EnableProfiler $ORIGIN/metrics.dump
 
-#showAnalyzer sysbus.usart2
+showAnalyzer sysbus.usart2
 logLevel -1 nvic0
 logLevel -1 cpu0
 logLevel 0
