@@ -32,6 +32,12 @@
 #include "miros.h"
 #include "qassert.h"
 #include "stm32g4xx.h"
+<<<<<<< Updated upstream
+=======
+#include "trace_uart.h"
+
+static volatile uint16_t traceTail = 0U;
+>>>>>>> Stashed changes
 
 Q_DEFINE_THIS_FILE
 
@@ -374,19 +380,52 @@ const uint32_t SYS_CLOCK_HZ = 170000000U;
 void OS_onStartup(void) {
 	SystemClock_Config();
     SystemCoreClockUpdate();
+<<<<<<< Updated upstream
+=======
+    rtos::Trace_uart_init();
+    Trace_uart_test_renode();
+>>>>>>> Stashed changes
     SysTick_Config(SYS_CLOCK_HZ / TICKS_PER_SEC);
-
     /* set the SysTick interrupt priority (highest) */
     NVIC_SetPriority(SysTick_IRQn, 0U);
 }
 
 void OS_onIdle(void) {
+	uint16_t head = traceHead;
+	    uint16_t tail = ::traceTail;
+	    uint16_t count = (head >= tail) ? (head - tail) : (TRACE_SIZE - tail + head);
+	    if (count >= TRACE_DRAIN_THRESH) {
+	        Trace_drain_uart();
+	    }
 #ifdef NDBEBUG
     __WFI(); /* stop the CPU and Wait for Interrupt */
 #endif
 }
 
 }//fim namespace
+
+// Fora do namespace: acessa HAL C puro sem conflito de mangling
+void rtos::Trace_uart_init(void) {
+    Trace_uart_init_c();
+}
+
+void rtos::Trace_drain_uart(void) {
+    while (traceTail != rtos::traceHead) {
+        volatile rtos::TraceEvent *e = &rtos::traceBuffer[traceTail];
+        uint8_t pkt[8];
+        pkt[0] = TRACE_PACKET_MAGIC;
+        pkt[1] = e->event;
+        pkt[2] = e->task;
+        pkt[3] = 0U;
+        uint32_t t = e->tick;
+        pkt[4] = (uint8_t)(t);
+        pkt[5] = (uint8_t)(t >> 8);
+        pkt[6] = (uint8_t)(t >> 16);
+        pkt[7] = (uint8_t)(t >> 24);
+        Trace_uart_transmit_c(pkt, 8U);
+        traceTail = (traceTail + 1U >= TRACE_SIZE) ? 0U : traceTail + 1U;
+    }
+}
 
 void Q_onAssert(char const *module, int loc) {
     /* TBD: damage control */
