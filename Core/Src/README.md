@@ -9,4 +9,4 @@ Main contents:
 
 New project modules should be added carefully, preserving the original MiROS/STM32CubeIDE structure.
 
-comando renode: ../renode_1.16.1-dotnet_portable/renode ./str-renode.resc
+

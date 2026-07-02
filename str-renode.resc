@@ -9,11 +9,13 @@ mach create $name
 machine LoadPlatformDescription $ORIGIN/nucleog474re.repl
 #machine EnableProfiler $ORIGIN/metrics.dump
 
+emulation CreateServerSocketTerminal 4444 "uartterm" false
+connector Connect sysbus.usart2 uartterm
 showAnalyzer sysbus.usart2
 logLevel -1 nvic0
 logLevel -1 cpu0
-logLevel 0
-sysbus.cpu0 LogFunctionNames True
+logLevel 3
+#sysbus.cpu0 LogFunctionNames True
 
 set osPanicHook
 """

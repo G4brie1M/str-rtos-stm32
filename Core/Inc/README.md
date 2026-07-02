@@ -9,4 +9,3 @@ Main contents:
 
 The file `miros.h` contains the main MiROS interface used by the project.
 
-comando renode: ../renode_1.16.1-dotnet_portable/renode ./str-renode.resc

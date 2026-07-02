@@ -7,6 +7,8 @@
 
 #ifndef INC_MIROS_H_
 #define INC_MIROS_H_
+#define TRACE_PACKET_MAGIC  0xABU
+#define TRACE_DRAIN_THRESH  32U
 
 namespace rtos {
 /* Thread Control Block (TCB) */
@@ -18,6 +20,8 @@ typedef struct {
     /* ... other attributes associated with a thread */
 } OSThread;
 
+void Trace_uart_init(void);       // inicializa USART2
+void Trace_drain_uart(void);      // transmite eventos pendentes
 /* Semaforo contador com fila de bloqueio (Fase 1).
  * waitSet e um bitmask no mesmo estilo de OS_readySet: o bit (n-1) ligado
  * significa que a thread n esta bloqueada NESTE semaforo */
@@ -37,15 +41,15 @@ enum TraceEventType {
     TRACE_SEM_SIGNAL,
     TRACE_SEM_WAKE,
     TRACE_ISR_ENTER,
-	TRACE_THREAD_READY,
+    TRACE_THREAD_READY,
     TRACE_ISR_EXIT
 };
 
 typedef struct {
-	uint32_t tick;
-	uint8_t event;
-	uint8_t task;
-	uint16_t data;
+    uint32_t tick;
+    uint8_t event;
+    uint8_t task;
+    uint16_t data;
 } TraceEvent;
 
 #define TRACE_SIZE 512U
@@ -89,7 +93,7 @@ void OSSem_signal(OSSemaphore *me);
 
 void OSThread_start(
     OSThread *me,
-	uint32_t period,
+    uint32_t period,
     OSThreadHandler threadHandler,
     void *stkSto, uint32_t stkSize);
 
