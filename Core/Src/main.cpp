@@ -26,12 +26,11 @@ uint32_t conta0=0, conta1=0, conta2=0;
  * Os periodos sao dados em ticks; TICKS_PER_SEC = 100, entao 1 tick = 10 ms
  * Eles sao DIFERENTES de proposito: com periodos iguais os deadlines empataria
  * e o EDF nao teria nada para ordenar, entao pareceria identico a round-robin */
-const uint32_t PERIOD_T1 = 20U;  //200 ms
-const uint32_t PERIOD_T2 = 40U;  //400 ms
-const uint32_t PERIOD_T3 = 80U;  //800 ms
-
+const uint32_t PERIOD_T1 = 30U;
+const uint32_t PERIOD_T2 = 35U;
+const uint32_t PERIOD_T3 = 50U;
 //criação do buffer produtor/consumidor
-#define BUFFER_SIZE 8 //inicialmente definido para 8 mas podemos analisar valores melhores
+#define BUFFER_SIZE 10 //inicialmente definido para 8 mas podemos analisar valores melhores
 
 uint8_t fifo[BUFFER_SIZE];
 

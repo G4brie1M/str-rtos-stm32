@@ -107,10 +107,6 @@ lpuart1: UART.STM32F7_USART @ sysbus 0x40008000
     frequency: 200000000
     lowPowerMode: true
     IRQ->nvic0@91
-    
-usart2: UART.STM32F7_USART @ sysbus 0x40004400
-    frequency: 170000000
-    IRQ->nvic0@38
 
 rcc: Python.PythonPeripheral @ sysbus 0x40021000
     size: 0x400

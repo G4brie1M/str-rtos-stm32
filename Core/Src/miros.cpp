@@ -135,7 +135,9 @@ void OS_tick(void) {
 			          OS_thread[n]->timeout = OS_thread[n]->period;//reseta o timeout
 			      }
 			      Trace_log(TRACE_THREAD_READY, n);//guarda esse evento
-			      OS_readySet |= (1U << (n-1U));
+			      if (!OS_thread[n]->blockedOnSem) {   // <-- so libera se nao estiver presa num semaforo
+			                          OS_readySet |= (1U << (n - 1U));
+			                      }
 			  }
 		}
 	}
@@ -213,7 +215,17 @@ void OSSem_wait(OSSemaphore *me) {
         me->waitSet |= (1U << (OS_currIdx - 1U));
         OS_readySet &= ~(1U << (OS_currIdx - 1U));
         Trace_log(TRACE_SEM_BLOCK, OS_currIdx);//guarda esse evento
-        OS_curr->timeout = 0U; // nao e espera por tempo: o tick a ignora
+
+        OS_curr->blockedOnSem = 1U;   // <-- avisa o OS_tick pra nao mexer nela
+
+        // so tarefas NAO periodicas usam timeout como espera pura;
+        // em tarefas periodicas, timeout eh a contagem regressiva ate a
+        // proxima liberacao e NAO pode ser zerada aqui, senao o OS_tick
+        // nunca mais rearma essa tarefa (bug que travava a task2)
+        if (OS_curr->period == 0U) {
+            OS_curr->timeout = 0U;
+        }
+
         OS_sched(); //cede a CPU, retorna aqui ao ser acordada
     }
     __asm volatile ("cpsie i");
@@ -239,6 +251,7 @@ void OSSem_signal(OSSemaphore *me){
             }
         }
         me->waitSet &= ~(1U << (wakeIdx - 1U));//sai da fila do semaforo
+        OS_thread[wakeIdx]->blockedOnSem = 0U;
         OS_readySet |= (1U << (wakeIdx - 1U)); //volta a ser pronta
         Trace_log(TRACE_SEM_WAKE, wakeIdx);//guarda esse evento
         Trace_log(TRACE_THREAD_READY, wakeIdx);//guarda esse evento

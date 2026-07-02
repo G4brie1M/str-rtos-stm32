@@ -18,6 +18,7 @@ typedef struct {
     uint32_t period;// periodo da tarefa em ticks
     uint32_t absDeadline; // tick da deadline absoluta
     /* ... other attributes associated with a thread */
+    uint8_t  blockedOnSem; // 1 enquanto a thread estiver no waitSet de algum semaforo
 } OSThread;
 
 void Trace_uart_init(void);       // inicializa USART2
