@@ -27,7 +27,16 @@ void Trace_uart_init_c(void) {
 }
 
 void Trace_uart_transmit_c(const uint8_t *buf, uint16_t len) {
-    HAL_UART_Transmit(&huart2_trace, (uint8_t*)buf, len, 10);
+    volatile uint32_t *usart2_cr1 = (volatile uint32_t *)0x40004400;
+    *usart2_cr1 |= (1U << 0) | (1U << 3);   // garante UE + TE
+
+    volatile uint32_t *usart2_tdr = (volatile uint32_t *)0x40004428;
+    for (uint16_t i = 0; i < len; i++) {
+        *usart2_tdr = buf[i];
+    }
+    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    //No software real talvez tenha de ser usado HAL UART TRANSMIT
+    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 }
 
 void Trace_uart_test_renode(void) {

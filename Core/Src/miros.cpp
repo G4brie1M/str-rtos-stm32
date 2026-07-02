@@ -379,7 +379,6 @@ void OS_onStartup(void) {
 	SystemClock_Config();
     SystemCoreClockUpdate();
     rtos::Trace_uart_init();
-    Trace_uart_test_renode();
     SysTick_Config(SYS_CLOCK_HZ / TICKS_PER_SEC);
     /* set the SysTick interrupt priority (highest) */
     NVIC_SetPriority(SysTick_IRQn, 0U);
@@ -392,7 +391,6 @@ void OS_onIdle(void) {
 	    if (count >= TRACE_DRAIN_THRESH) {
 	        Trace_drain_uart();
 	    }
-	    Trace_uart_test_renode();
 #ifdef NDBEBUG
     __WFI(); /* stop the CPU and Wait for Interrupt */
 #endif
@@ -418,6 +416,7 @@ void rtos::Trace_drain_uart(void) {
         pkt[5] = (uint8_t)(t >> 8);
         pkt[6] = (uint8_t)(t >> 16);
         pkt[7] = (uint8_t)(t >> 24);
+
         Trace_uart_transmit_c(pkt, 8U);
         traceTail = (traceTail + 1U >= TRACE_SIZE) ? 0U : traceTail + 1U;
     }
