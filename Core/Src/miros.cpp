@@ -32,12 +32,10 @@
 #include "miros.h"
 #include "qassert.h"
 #include "stm32g4xx.h"
-<<<<<<< Updated upstream
-=======
+
 #include "trace_uart.h"
 
 static volatile uint16_t traceTail = 0U;
->>>>>>> Stashed changes
 
 Q_DEFINE_THIS_FILE
 
@@ -380,11 +378,8 @@ const uint32_t SYS_CLOCK_HZ = 170000000U;
 void OS_onStartup(void) {
 	SystemClock_Config();
     SystemCoreClockUpdate();
-<<<<<<< Updated upstream
-=======
     rtos::Trace_uart_init();
     Trace_uart_test_renode();
->>>>>>> Stashed changes
     SysTick_Config(SYS_CLOCK_HZ / TICKS_PER_SEC);
     /* set the SysTick interrupt priority (highest) */
     NVIC_SetPriority(SysTick_IRQn, 0U);
@@ -397,6 +392,7 @@ void OS_onIdle(void) {
 	    if (count >= TRACE_DRAIN_THRESH) {
 	        Trace_drain_uart();
 	    }
+	    Trace_uart_test_renode();
 #ifdef NDBEBUG
     __WFI(); /* stop the CPU and Wait for Interrupt */
 #endif

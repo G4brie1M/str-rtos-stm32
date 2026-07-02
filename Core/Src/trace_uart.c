@@ -21,6 +21,9 @@ void Trace_uart_init_c(void) {
     huart2_trace.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
     huart2_trace.Init.OverSampling = UART_OVERSAMPLING_16;
     HAL_UART_Init(&huart2_trace);
+    // Força habilitação no Renode (HAL_UART_Init não funciona no simulador)
+        volatile uint32_t *usart2_cr1 = (volatile uint32_t *)0x40004400;
+        *usart2_cr1 |= (1U << 0) | (1U << 3);
 }
 
 void Trace_uart_transmit_c(const uint8_t *buf, uint16_t len) {
@@ -28,10 +31,11 @@ void Trace_uart_transmit_c(const uint8_t *buf, uint16_t len) {
 }
 
 void Trace_uart_test_renode(void) {
-    // Escreve direto no registrador TDR da USART2 (0x40004428)
-    // sem depender do HAL_UART_Init
-    volatile uint32_t *usart2_tdr = (volatile uint32_t *)0x40004428;
+    // Habilita USART2 diretamente no registrador CR1 (bit 0 = UE, bit 3 = TE)
+    volatile uint32_t *usart2_cr1 = (volatile uint32_t *)0x40004400;
+    *usart2_cr1 |= (1U << 0) | (1U << 3);  // UE + TE
 
+    volatile uint32_t *usart2_tdr = (volatile uint32_t *)0x40004428;
     const char *msg = "TRACE OK\r\n";
     for (int i = 0; msg[i]; i++) {
         *usart2_tdr = (uint8_t)msg[i];

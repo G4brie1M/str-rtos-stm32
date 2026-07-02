@@ -131,6 +131,10 @@ spi3: SPI.STM32SPI @ sysbus 0x40003c00
 usart1: UART.STM32F7_USART @ sysbus 0x40013800
     frequency: 200000000
     IRQ->nvic0@37
+    
+usart2: UART.STM32F7_USART @ sysbus 0x40004400
+    frequency: 200000000
+    IRQ->nvic0@38
 
 iwdg: Timers.STM32_IndependentWatchdog @ sysbus 0x40003000
     frequency: 32000

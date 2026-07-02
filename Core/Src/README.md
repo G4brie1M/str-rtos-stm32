@@ -9,6 +9,3 @@ Main contents:
 
 New project modules should be added carefully, preserving the original MiROS/STM32CubeIDE structure.
 
-// TODO (Trace v2):
-// Alterar Trace_log(event) para Trace_log(event, task)
-// permitindo registrar tarefas diferentes da tarefa atual.
